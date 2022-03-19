@@ -37,7 +37,8 @@ def main(args):
                                      forward_implementation=args.use_forward_implementation)
     else:
         raise ValueError(f'Resize method {args.resize_method} is not supported')
-    utils.save_images(output, args.out_prefix)
+
+    utils.save_images(output, args.output_dir, args.out_prefix)
 
 
 if __name__ == '__main__':
