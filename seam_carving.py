@@ -4,19 +4,54 @@ import numpy as np
 
 import utils
 
-
-RED = [255, 0, 0]
-
-BLACK = [0, 0, 0]
-
 NDArray = Any
 
-def horizontal_forward_energy(arr):
+RED   = [255, 0, 0]
+BLACK = [  0, 0, 0]
+
+
+def compute_gradient_magnitude(intensity):
+    grad_y = np.diff(intensity, n=1, axis=0)
+    grad_x = np.diff(intensity, n=1, axis=1)
+
+    return np.sqrt((grad_x ** 2 + grad_y ** 2) / 2)
+
+
+def get_left_neighbors_min_value(arr, i, j):
+    """
+    get the minimal value of the 3 left neighbors of the pixel (i,j)
+
+    :param arr: numpy array of values
+    :param i: row index
+    :param j: col index
+
+    :return: minimal value of left neighbors
+    """
+    h, w = arr.shape[:2]
+    if j == 0:
+        return 0 # no left neighbors
+
+    # get "in-bounds" rows of neighbors
+    neighbor_rows = [max(0, i - 1),
+                     i,
+                     min(h - 1, i + 1)]
+
+    values = [arr[row, j - 1] for row in neighbor_rows] # values can repeat but it doesn't matter since we take the mean
+
+    return np.min(values)
+
+
+def horizontal_forward_energy(grad):
     pass
 
 
-def horizontal_grad_energy(arr):
-    pass
+def horizontal_grad_energy(grad):
+    energy = grad.copy()
+    for j in range(energy.shape[1]):
+        for i in range(energy.shape[0]):
+            energy[i, j] += get_left_neighbors_min_value(energy, i, j)
+
+    return energy
 
 
 def horizontal_resize(image, k, use_forward):
@@ -31,7 +66,8 @@ def horizontal_resize(image, k, use_forward):
                      list of indices of carved pixels
     """
     intensity = utils.to_grayscale(image)
-    energy = horizontal_forward_energy(intensity) if use_forward else horizontal_grad_energy(intensity)
+    gradient  = compute_gradient_magnitude(intensity)
+    energy    = horizontal_forward_energy(gradient) if use_forward else horizontal_grad_energy(gradient)
 
     return image, image
 
