@@ -27,11 +27,11 @@ def get_left_neighbors_min_value(arr, i, j):
 
     :return: minimal value of left neighbors
     """
-    h, w = arr.shape[:2]
     if j == 0:
         return 0 # no left neighbors
 
     # get "in-bounds" rows of neighbors
+    h, w = arr.shape[:2]
     neighbor_rows = [max(0, i - 1),
                      i,
                      min(h - 1, i + 1)]
@@ -42,16 +42,29 @@ def get_left_neighbors_min_value(arr, i, j):
 
 
 def horizontal_forward_energy(grad):
-    pass
+    raise NotImplementedError()
 
 
-def horizontal_grad_energy(grad):
+def horizontal_backward_energy(grad):
     energy = grad.copy()
     for j in range(energy.shape[1]):
         for i in range(energy.shape[0]):
             energy[i, j] += get_left_neighbors_min_value(energy, i, j)
 
     return energy
+
+
+def select_horizontal_seams(energy, k):
+    """
+    select horizontal seams
+
+    :param energy: energy values to base the decision on
+    :param k: number of seams to select
+
+    :return: list of lists of seam indices
+    """
+    start = np.argmin(energy[:, -1]) # start from the last row
+    # TODO select greedily or all at once
 
 
 def horizontal_resize(image, k, use_forward):
@@ -67,7 +80,7 @@ def horizontal_resize(image, k, use_forward):
     """
     intensity = utils.to_grayscale(image)
     gradient  = compute_gradient_magnitude(intensity)
-    energy    = horizontal_forward_energy(gradient) if use_forward else horizontal_grad_energy(gradient)
+    energy    = horizontal_forward_energy(gradient) if use_forward else horizontal_backward_energy(gradient)
 
     return image, image
 
