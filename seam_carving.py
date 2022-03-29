@@ -146,8 +146,12 @@ def resize_cols(image, k, use_forward):
         flattened_image = np.delete(image.reshape([-1, 3]),output_seam.flatten(),axis=0)
         image = flattened_image.reshape(new_image_shape)
     else:
-        # TODO: add elements
-        raise NotImplementedError()
+        # add elements
+        indices_of_items_to_repeat = np.argwhere(output_seam.flatten()).flatten()
+        flattened_image = image.reshape([-1, 3])
+        items_to_repeat = flattened_image[indices_of_items_to_repeat, :]
+        flattened_image = np.insert(flattened_image, indices_of_items_to_repeat, np.squeeze(items_to_repeat), axis=0)
+        image = flattened_image.reshape(new_image_shape)
 
     return image, output_seam
 
