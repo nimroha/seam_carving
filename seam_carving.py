@@ -138,7 +138,16 @@ def resize_cols(image, k, use_forward):
         row_indices    = remove_seam(row_indices, seam)
         gradient       = remove_seam(gradient, seam)
 
-    # TODO: reduce / enlarge the image
+    # reduce / enlarge the image
+    new_image_shape = list(image.shape)
+    new_image_shape[1] = new_image_shape[1] + k
+    if k < 0:
+        # remove elements
+        flattened_image = np.delete(image.reshape([-1, 3]),output_seam.flatten(),axis=0)
+        image = flattened_image.reshape(new_image_shape)
+    else:
+        # TODO: add elements
+        raise NotImplementedError()
 
     return image, output_seam
 
@@ -164,7 +173,7 @@ def resize(image: NDArray, out_height: int, out_width: int, forward_implementati
     horizontal_seams  = np.rot90(horizontal_seams_rot,  -1)
 
     # add visualizations
-    horizontal_seams_viz = image.copy() # take the image one step before the carving
+    horizontal_seams_viz = vertical_carved.copy() # take the image one step before the carving
     vertical_seams_viz   = image.copy() # same
 
     horizontal_seams_viz[horizontal_seams] = BLACK
