@@ -10,62 +10,70 @@ RED   = [255, 0, 0]
 BLACK = [  0, 0, 0]
 
 
-def compute_gradient_magnitude(intensity):
-    grad_y = np.diff(intensity, n=1, axis=0)
-    grad_x = np.diff(intensity, n=1, axis=1)
-
-    return np.sqrt((grad_x ** 2 + grad_y ** 2) / 2)
-
-
-def get_top_neighbors_min_value(arr, i, j):
-    """
-    get the minimal value of the 3 top neighbors of the pixel (i,j)
-
-    :param arr: numpy array of values
-    :param i: row index
-    :param j: col index
-
-    :return: minimal value of top neighbors
-    """
-    if i == 0:
-        return 0 # no left neighbors
-
-    # get "in-bounds" rows of neighbors
-    h, w = arr.shape[:2]
-    neighbor_cols = [max(0, j - 1),
-                     j,
-                     min(w - 1, j + 1)]
-
-    values = [arr[i - 1, col] for col in neighbor_cols] # values can repeat but it doesn't matter since we take the mean
-
-    return np.min(values)
-
-
-def horizontal_vertical_energy(grad):
+def horizontal_vertical_cost(grad):
     raise NotImplementedError()
 
 
-def vertical_backward_energy(grad):
+def vertical_backward_cost(grad):
+    """
+    calculate vertical cost matrix
+
+    :param grad: gradient of the image in each point
+
+    :return: cost matrix, min matrix that indicated where in the last row the minimum came from
+    """
     energy = grad.copy()
-    for i in range(energy.shape[0]):
-        for j in range(energy.shape[1]):
-            energy[i, j] += get_top_neighbors_min_value(energy, i, j)
 
-    return energy
+    # pad zero row from above
+    zero_row = np.zeros([1, energy.shape[1]])
+    energy_pad = np.row_stack([zero_row, energy])
+
+    # pad zero columns from the left and right
+    zero_column = np.zeros([energy_pad.shape[0], 1])
+    energy_pad = np.column_stack([zero_column, energy_pad, zero_column])
+
+    image_range = np.arange(1,energy_pad.shape[1]-1)
+
+    min_indices = np.zeros_like(grad, dtype=int)
+
+    for i in range(1, energy_pad.shape[0]):
+        # create a matrix of size [3 x image_width]
+        # where the 3 rows correspond to the 3 options to go from left / center / right
+        last_row_options = np.row_stack([energy_pad[i-1, :-2], energy_pad[i-1, 1:-1], energy_pad[i-1, 2:]])
+        # min_index[i]: "-1" - came from left, "0" - came from center, "1" - came from right
+        min_index = np.argmin(last_row_options, axis=0)-1
+        energy_pad[i, 1:-1] += energy_pad[i-1, image_range+min_index]
+        energy_pad[i, 0] = energy_pad[i, 1]
+        energy_pad[i, -1] = energy_pad[i, -2]
+        min_indices[i-1,:] = min_index
+
+    return energy_pad[1:,1:-1], min_indices
 
 
-def select_vertical_seams(energy, k):
+def select_vertical_seam(cost, min_indices):
     """
-    select horizontal seams
+    select vertical seams
 
-    :param energy: energy values to base the decision on
-    :param k: number of seams to select
+    :param cost: cost function generated from the image
+    :param min_indices: min indices matrix for backtracking
 
-    :return: list of lists of seam indices
+    :return: vector of seam indices (first index corresponds to the first row in the image
     """
-    start = np.argmin(energy[:, -1]) # start from the last row
-    # TODO select greedily or all at once
+    seam = np.zeros([cost.shape[0]],dtype=int)
 
+    start = np.argmin(cost[:, -1]) # start from the last row
+
+    seam[-1] = start
+
+    for i in range(cost.shape[0]-1, 0, -1):
+        new_index = seam[i] + min_indices[i, seam[i]]
+        if new_index < 0:
+            new_index = 0
+        if new_index > cost.shape[1]:
+            new_index = cost.shape[1]
+        seam[i-1] = new_index
+
+    return seam
 
 def resize_cols(image, k, use_forward):
     """
@@ -79,8 +87,9 @@ def resize_cols(image, k, use_forward):
                      list of indices of carved pixels
     """
     intensity = utils.to_grayscale(image)
-    gradient  = compute_gradient_magnitude(intensity)
-    energy    = horizontal_vertical_energy(gradient) if use_forward else vertical_backward_energy(gradient)
+    gradient = utils.get_gradients(intensity)
+    cost, min_indices = horizontal_vertical_cost(gradient) if use_forward else vertical_backward_cost(gradient)
+    seam = select_vertical_seam(cost, min_indices)
 
     return image, image
 
@@ -108,8 +117,10 @@ def resize(image: NDArray, out_height: int, out_width: int, forward_implementati
     # add visualizations
     horizontal_seams_viz = image.copy() # take the image one step before the carving
     vertical_seams_viz   = horizontal_carved.copy() # same
-    horizontal_seams_viz[horizontal_seams] = BLACK
-    vertical_seams_viz[vertical_seams]     = RED
+
+    # TODO:
+    # horizontal_seams_viz[horizontal_seams] = BLACK
+    # vertical_seams_viz[vertical_seams]     = RED
 
     return {'resized':          vertical_carved, # this is after both steps
             'horizontal_seams': horizontal_seams_viz,
