@@ -52,7 +52,7 @@ def vertical_backward_cost(grad):
 
 def select_vertical_seam(cost, min_indices):
     """
-    select vertical seams
+    select vertical seams (backtracking algorithm)
 
     :param cost: cost function generated from the image
     :param min_indices: min indices matrix for backtracking
@@ -61,7 +61,7 @@ def select_vertical_seam(cost, min_indices):
     """
     seam = np.zeros([cost.shape[0]],dtype=int)
 
-    start = np.argmin(cost[:, -1]) # start from the last row
+    start = np.argmin(cost[-1, :]) # start from the last row
 
     seam[-1] = start
 
@@ -75,6 +75,37 @@ def select_vertical_seam(cost, min_indices):
 
     return seam
 
+
+def roll_matrix(A, r):
+    """
+    Roll the rows of A by r.
+    From: https://stackoverflow.com/questions/20360675/roll-rows-of-a-matrix-independently
+
+    :param A: matrix to roll
+    :param r: roll value
+    :return: rolled matrix
+    """
+    rows, column_indices = np.ogrid[:A.shape[0], :A.shape[1]]
+    r[r < 0] += A.shape[1]
+    column_indices = column_indices - r[:,np.newaxis]
+    return A[rows, column_indices]
+
+
+def remove_seam(matrix, seam):
+    """
+    remove seam from matrix
+
+    :param matrix: 2d matrix
+    :param seam: seam to be removed from matrix
+    :return: matrix with 1 less column (according to the seam)
+    """
+
+    matrix = roll_matrix(matrix, -seam)
+    matrix = matrix[:, 1:]
+    matrix = roll_matrix(matrix, seam)
+    return matrix
+
+
 def resize_cols(image, k, use_forward):
     """
     find horizontal seams and remove/duplicate them
@@ -84,14 +115,32 @@ def resize_cols(image, k, use_forward):
     :param use_forward: whether to use the forward energy for seam finding (False for simple gradient)
 
     :return: tuple - numpy array of carved image
-                     list of indices of carved pixels
+                     matrix that indicates the selected pixels
     """
     intensity = utils.to_grayscale(image)
     gradient = utils.get_gradients(intensity)
-    cost, min_indices = horizontal_vertical_cost(gradient) if use_forward else vertical_backward_cost(gradient)
-    seam = select_vertical_seam(cost, min_indices)
 
-    return image, image
+    column_indices = np.tile(np.arange(gradient.shape[1]), [gradient.shape[0], 1])
+    row_indices = np.tile(np.arange(gradient.shape[0])[:,np.newaxis], gradient.shape[1])
+    output_seam = np.zeros(gradient.shape, dtype=bool)
+
+    for current_k in range(np.abs(k)):
+        cost, min_indices = horizontal_vertical_cost(gradient) if use_forward else vertical_backward_cost(gradient)
+        seam = select_vertical_seam(cost, min_indices)
+
+        # set output seam
+        current_seam_original_image_columns = column_indices[np.arange(gradient.shape[0]), seam]
+        current_seam_original_image_rows    = row_indices[np.arange(gradient.shape[0]), seam]
+        output_seam[current_seam_original_image_rows, current_seam_original_image_columns] = True
+
+        # remove the relevant items from each matrix
+        column_indices = remove_seam(column_indices, seam)
+        row_indices    = remove_seam(row_indices, seam)
+        gradient       = remove_seam(gradient, seam)
+
+    # TODO: reduce / enlarge the image
+
+    return image, output_seam
 
 def resize(image: NDArray, out_height: int, out_width: int, forward_implementation: bool) -> Dict[str, NDArray]:
     """
@@ -109,19 +158,18 @@ def resize(image: NDArray, out_height: int, out_width: int, forward_implementati
     height_diff = out_height - image.shape[0]
     width_diff  = out_width  - image.shape[1]
 
-    horizontal_carved,   horizontal_seams   = resize_cols(image, width_diff, forward_implementation)
-    vertical_carved_rot, vertical_seams_rot = resize_cols(np.rot90(horizontal_carved), height_diff, forward_implementation)
-    vertical_carved = np.rot90(vertical_carved_rot, -1)
-    vertical_seams  = np.rot90(vertical_seams_rot,  -1)
+    vertical_carved,   vertical_seams = resize_cols(image, width_diff, forward_implementation)
+    horizontal_carved_rot, horizontal_seams_rot = resize_cols(np.rot90(vertical_carved), height_diff, forward_implementation)
+    carved = np.rot90(horizontal_carved_rot, -1)
+    horizontal_seams  = np.rot90(horizontal_seams_rot,  -1)
 
     # add visualizations
     horizontal_seams_viz = image.copy() # take the image one step before the carving
-    vertical_seams_viz   = horizontal_carved.copy() # same
+    vertical_seams_viz   = image.copy() # same
 
-    # TODO:
-    # horizontal_seams_viz[horizontal_seams] = BLACK
-    # vertical_seams_viz[vertical_seams]     = RED
+    horizontal_seams_viz[horizontal_seams] = BLACK
+    vertical_seams_viz[vertical_seams]     = RED
 
-    return {'resized':          vertical_carved, # this is after both steps
+    return {'resized':          carved, # this is after both steps
             'horizontal_seams': horizontal_seams_viz,
             'vertical_seams':   vertical_seams_viz}
