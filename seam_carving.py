@@ -30,15 +30,23 @@ def vertical_cost(grad, intensity, use_forward):
     inf_column = np.full([energy_pad.shape[0], 1], fill_value=np.inf)
     energy_pad = np.column_stack([inf_column, energy_pad, inf_column])
 
-    image_range = np.arange(1,energy_pad.shape[1]-1)
+    if use_forward: # pad intensity as well
+        # mirror the top row to avoid considering "phantom" edges at the top of the image # TODO necessary?
+        intensity_pad = np.row_stack([intensity[0], intensity])
 
+        # pad infinity columns from the left and right
+        intensity_pad = np.column_stack([inf_column, intensity_pad, inf_column])
+
+    image_range = np.arange(1,energy_pad.shape[1]-1)
     min_indices = np.zeros_like(grad, dtype=int)
 
     for i in range(1, energy_pad.shape[0]):
         # create a matrix of size [3 x image_width]
         # where the 3 rows correspond to the 3 options to go from left / center / right
         last_row_options = np.row_stack([energy_pad[i-1, :-2], energy_pad[i-1, 1:-1], energy_pad[i-1, 2:]])
-        # TODO add new edges created from carving (if forward)
+        if use_forward: # add the cost of new edges
+            last_row_new_edge_cost = None # TODO compute new edges here with intensity pad
+            last_row_options += last_row_new_edge_cost
 
         # min_index[i]: "-1" - came from left, "0" - came from center, "1" - came from right
         min_index = np.argmin(last_row_options, axis=0)-1
