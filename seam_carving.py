@@ -10,15 +10,13 @@ RED   = [255, 0, 0]
 BLACK = [  0, 0, 0]
 
 
-def horizontal_vertical_cost(grad):
-    raise NotImplementedError()
-
-
-def vertical_backward_cost(grad):
+def vertical_cost(grad, intensity, use_forward):
     """
     calculate vertical cost matrix
 
     :param grad: gradient of the image in each point
+    :param intensity: intensity values of the image (greyscale)
+    :param use_forward: whether to compute forward energy cost or just gradient based
 
     :return: cost matrix, min matrix that indicated where in the last row the minimum came from
     """
@@ -28,9 +26,9 @@ def vertical_backward_cost(grad):
     zero_row = np.zeros([1, energy.shape[1]])
     energy_pad = np.row_stack([zero_row, energy])
 
-    # pad zero columns from the left and right
-    zero_column = np.zeros([energy_pad.shape[0], 1])
-    energy_pad = np.column_stack([zero_column, energy_pad, zero_column])
+    # pad infinity columns from the left and right
+    inf_column = np.full([energy_pad.shape[0], 1], fill_value=np.inf)
+    energy_pad = np.column_stack([inf_column, energy_pad, inf_column])
 
     image_range = np.arange(1,energy_pad.shape[1]-1)
 
@@ -40,6 +38,8 @@ def vertical_backward_cost(grad):
         # create a matrix of size [3 x image_width]
         # where the 3 rows correspond to the 3 options to go from left / center / right
         last_row_options = np.row_stack([energy_pad[i-1, :-2], energy_pad[i-1, 1:-1], energy_pad[i-1, 2:]])
+        # TODO add new edges created from carving (if forward)
+
         # min_index[i]: "-1" - came from left, "0" - came from center, "1" - came from right
         min_index = np.argmin(last_row_options, axis=0)-1
         energy_pad[i, 1:-1] += energy_pad[i-1, image_range+min_index]
@@ -125,7 +125,7 @@ def resize_cols(image, k, use_forward):
     output_seam = np.zeros(gradient.shape, dtype=bool)
 
     for current_k in range(np.abs(k)):
-        cost, min_indices = horizontal_vertical_cost(gradient) if use_forward else vertical_backward_cost(gradient)
+        cost, min_indices = vertical_cost(gradient, intensity, use_forward)
         seam = select_vertical_seam(cost, min_indices)
 
         # set output seam
@@ -136,7 +136,8 @@ def resize_cols(image, k, use_forward):
         # remove the relevant items from each matrix
         column_indices = remove_seam(column_indices, seam)
         row_indices    = remove_seam(row_indices, seam)
-        gradient       = remove_seam(gradient, seam)
+        intensity      = remove_seam(intensity, seam)
+        gradient       = utils.get_gradients(intensity)
 
     # reduce / enlarge the image
     new_image_shape = list(image.shape)
@@ -155,6 +156,7 @@ def resize_cols(image, k, use_forward):
 
     return image, output_seam
 
+
 def resize(image: NDArray, out_height: int, out_width: int, forward_implementation: bool) -> Dict[str, NDArray]:
     """
 
@@ -171,17 +173,17 @@ def resize(image: NDArray, out_height: int, out_width: int, forward_implementati
     height_diff = out_height - image.shape[0]
     width_diff  = out_width  - image.shape[1]
 
-    vertical_carved,   vertical_seams = resize_cols(image, width_diff, forward_implementation)
+    vertical_carved,       vertical_seams       = resize_cols(image, width_diff, forward_implementation)
     horizontal_carved_rot, horizontal_seams_rot = resize_cols(np.rot90(vertical_carved), height_diff, forward_implementation)
     carved = np.rot90(horizontal_carved_rot, -1)
     horizontal_seams  = np.rot90(horizontal_seams_rot,  -1)
 
     # add visualizations
-    horizontal_seams_viz = vertical_carved.copy() # take the image one step before the carving
-    vertical_seams_viz   = image.copy() # same
+    vertical_seams_viz   = image.copy() # take the image one step before the carving
+    horizontal_seams_viz = vertical_carved.copy() # same
 
-    horizontal_seams_viz[horizontal_seams] = BLACK
     vertical_seams_viz[vertical_seams]     = RED
+    horizontal_seams_viz[horizontal_seams] = BLACK
 
     return {'resized':          carved, # this is after both steps
             'horizontal_seams': horizontal_seams_viz,

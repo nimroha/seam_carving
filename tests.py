@@ -2,7 +2,7 @@ import os
 import pytest
 import numpy as np
 
-from seam_carving import vertical_backward_cost, roll_matrix, remove_seam, resize
+from seam_carving import vertical_cost, roll_matrix, remove_seam, resize
 from utils import open_image
 
 TEST_IMAGE_PATH   = os.path.join(os.path.dirname(__file__), 'checkpoint.jpeg')
@@ -23,7 +23,7 @@ def test_vertical_backward_energy():
                                 [ 9,  7,  6, 12],
                                 [14,  9, 10,  8],
                                 [14, 13, 15, 16]])
-    cost, min_indices = vertical_backward_cost(grad)
+    cost, min_indices = vertical_cost(grad, intensity=None, use_forward=False) # only test gradient ("backwards")
 
     assert np.all(cost == expected_energy), {'got': cost, 'expected': expected_energy}
 
