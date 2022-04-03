@@ -37,6 +37,8 @@ def vertical_cost(grad, intensity, use_forward):
         # pad infinity columns from the left and right
         intensity_pad = np.column_stack([inf_column, intensity_pad, inf_column])
 
+        new_x_edge, new_y_left_edge, new_y_right_edge = compute_new_edge_cost(intensity_pad)
+
     image_range = np.arange(1,energy_pad.shape[1]-1)
     min_indices = np.zeros_like(grad, dtype=int)
 
@@ -45,7 +47,7 @@ def vertical_cost(grad, intensity, use_forward):
         # where the 3 rows correspond to the 3 options to go from left / center / right
         last_row_options = np.row_stack([energy_pad[i-1, :-2], energy_pad[i-1, 1:-1], energy_pad[i-1, 2:]])
         if use_forward: # add the cost of new edges
-            last_row_new_edge_cost = None # TODO compute new edges here with intensity pad
+            last_row_new_edge_cost = np.row_stack([new_y_left_edge[i, :-2], new_x_edge[i, 1:-1], new_y_right_edge[i, 2:]])
             last_row_options += last_row_new_edge_cost
 
         # min_index[i]: "-1" - came from left, "0" - came from center, "1" - came from right
@@ -56,6 +58,19 @@ def vertical_cost(grad, intensity, use_forward):
         min_indices[i-1,:] = min_index
 
     return energy_pad[1:,1:-1], min_indices
+
+
+def compute_new_edge_cost(intensity):
+    x_edge       = np.abs(np.roll(intensity,  1, axis=1) - np.roll(intensity, -1, axis=1))
+    y_left_edge  = np.abs(np.roll(intensity, -1, axis=0) - np.roll(intensity, -1, axis=1))
+    y_right_edge = np.abs(np.roll(intensity, -1, axis=0) - np.roll(intensity,  1, axis=1))
+
+    # remove NaNs
+    x_edge      [np.isnan(x_edge)]       = np.inf
+    y_left_edge [np.isnan(y_left_edge)]  = np.inf
+    y_right_edge[np.isnan(y_right_edge)] = np.inf
+
+    return x_edge, y_left_edge, y_right_edge
 
 
 def select_vertical_seam(cost, min_indices):
