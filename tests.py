@@ -47,7 +47,7 @@ def test_remove_seam():
 
 @pytest.mark.parametrize('h', [TEST_IMAGE_HEIGHT, TEST_IMAGE_HEIGHT + 30, TEST_IMAGE_HEIGHT - 30])
 @pytest.mark.parametrize('w', [TEST_IMAGE_WIDTH,  TEST_IMAGE_WIDTH  + 30, TEST_IMAGE_WIDTH  - 30])
-@pytest.mark.parametrize('use_forward', [False]) # TODO add True afte implementing
+@pytest.mark.parametrize('use_forward', [False, True])
 def test_resize(test_img, h, w, use_forward):
     img = test_img.copy()
     results = resize(img, h ,w, use_forward)
@@ -66,7 +66,7 @@ def test_compute_new_edge_cost():
                           [ 9,  9, 12, 19,  9, 11],
                           [16, 13, 18, 19,  8, 19]], dtype=np.int32)
 
-    padded  = np.row_stack([intensity[0], intensity])
+    padded  = np.row_stack([np.zeros(intensity.shape[1]), intensity])
     inf_col = np.full(padded.shape[1], fill_value=np.inf)
     padded  = np.column_stack([inf_col, padded, inf_col])
     x, left_y, right_y = compute_new_edge_cost(padded)
@@ -87,6 +87,9 @@ def test_compute_new_edge_cost():
         for j in range(1, padded.shape[1] - 1):
             expected_right_y[i, j] = np.abs(padded[i - 1, j] - padded[i, j + 1])
 
+    expected_left_y [:2] = 0 # zero out padding and first row
+    expected_right_y[:2] = 0
+
     assert np.all(x      [1:, 1:-1] == expected_x      [1:, 1:-1])
-    assert np.all(left_y [1:, 1:-1] == expected_left_y [1:, 1:-1]) # TODO shifted results
-    assert np.all(right_y[1:, 1:-1] == expected_right_y[1:, 1:-1]) # TODO shifted results
+    assert np.all(left_y [1:, 1:-1] == expected_left_y [1:, 1:-1])
+    assert np.all(right_y[1:, 1:-1] == expected_right_y[1:, 1:-1])

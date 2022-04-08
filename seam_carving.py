@@ -31,8 +31,8 @@ def vertical_cost(grad, intensity, use_forward):
     energy_pad = np.column_stack([inf_column, energy_pad, inf_column])
 
     if use_forward: # pad intensity as well
-        # mirror the top row to avoid considering "phantom" edges at the top of the image # TODO necessary?
-        intensity_pad = np.row_stack([intensity[0], intensity])
+        # it doesn't matter what we pad with, we're going to zero out the top row anyway
+        intensity_pad = np.row_stack([zero_row, intensity])
 
         # pad infinity columns from the left and right
         intensity_pad = np.column_stack([inf_column, intensity_pad, inf_column])
@@ -65,10 +65,17 @@ def compute_new_edge_cost(intensity):
     y_left_edge  = np.abs(np.roll(intensity, -1, axis=0) - np.roll(intensity, -1, axis=1))
     y_right_edge = np.abs(np.roll(intensity, -1, axis=0) - np.roll(intensity,  1, axis=1))
 
+    y_left_edge  = np.roll(np.roll(y_left_edge,  1, axis=0),  1, axis=1)
+    y_right_edge = np.roll(np.roll(y_right_edge, 1, axis=0), -1, axis=1)
+
     # remove NaNs
     x_edge      [np.isnan(x_edge)]       = np.inf
     y_left_edge [np.isnan(y_left_edge)]  = np.inf
     y_right_edge[np.isnan(y_right_edge)] = np.inf
+
+    # remove cost from padding and top row (no new edges created)
+    y_left_edge [:2] = 0
+    y_right_edge[:2] = 0
 
     return x_edge, y_left_edge, y_right_edge
 
